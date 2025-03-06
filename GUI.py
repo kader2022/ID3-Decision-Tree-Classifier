@@ -560,7 +560,3 @@ class DecisionTreeApp(ttk.Window):
         
         # Store ID3Tree instance
         self.id3_tree = None
-
-if __name__ == "__main__":
-    app = DecisionTreeApp()
-    app.mainloop()
