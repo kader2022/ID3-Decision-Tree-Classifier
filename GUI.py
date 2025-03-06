@@ -560,3 +560,4 @@ class DecisionTreeApp(ttk.Window):
         
         # Store ID3Tree instance
         self.id3_tree = None
+
