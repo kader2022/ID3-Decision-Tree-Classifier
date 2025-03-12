@@ -1,5 +1,6 @@
-from Data import Dataset
+from Data import Dataset, Example
 from Tree import ID3Tree
+from Node import *
 
 import tkinter as tk
 from tkinter import filedialog, messagebox
@@ -8,12 +9,14 @@ from ttkbootstrap.constants import *
 import pandas as pd
 import numpy as np
 import os
-
-
+import matplotlib.pyplot as plt
+import networkx as nx
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg , NavigationToolbar2Tk # Add this
+from matplotlib.figure import Figure
 
 class DecisionTreeApp(ttk.Window):
     def __init__(self):
-        super().__init__(themename="cosmo")
+        super().__init__(themename="superhero")
         self.title("Decision Tree System")
         self.geometry("900x650")
         
@@ -31,7 +34,7 @@ class DecisionTreeApp(ttk.Window):
         self.create_solution_tab()
         self.create_visualization_tab()
     
-    # input data part 
+    ############## input data part ##############
     def create_data_input_tab(self):
         """Create the data input tab"""
         data_tab = ttk.Frame(self.notebook)
@@ -327,7 +330,7 @@ class DecisionTreeApp(ttk.Window):
             messagebox.showerror("Error", f"Failed to save data: {str(e)}")
 
 
-    # generate solution part
+    ############## generate solution part ##############
     def create_solution_tab(self):
         """Create the solution tab (tree building)"""
         solution_tab = ttk.Frame(self.notebook)
@@ -374,6 +377,109 @@ class DecisionTreeApp(ttk.Window):
         self.labels_info = ttk.Label(info_frame, text="Possible classes: None")
         self.labels_info.pack(pady=5, padx=10, anchor=tk.W)
         
+        prediction_frame = ttk.LabelFrame(main_frame, text="Real-time Prediction")
+        prediction_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+        
+        # Frame for input fields
+        self.input_fields_frame = ttk.Frame(prediction_frame)
+        self.input_fields_frame.pack(pady=10)
+        
+        # Button and result display
+        predict_controls = ttk.Frame(prediction_frame)
+        predict_controls.pack(pady=10)
+        
+        self.predict_btn = ttk.Button(
+            predict_controls,
+            text="Predict",
+            command=self.run_prediction,
+            bootstyle=SUCCESS,
+            state="disabled"
+        )
+        self.predict_btn.pack(side=tk.LEFT, padx=5)
+        
+        self.prediction_result = ttk.Label(
+            predict_controls,
+            text="Prediction: ",
+            font=("Helvetica", 12, "bold"),
+            bootstyle="inverse-dark"
+        )
+        self.prediction_result.pack(side=tk.LEFT, padx=15)
+        
+        # Initialize input fields
+        self.attribute_inputs = {}    
+    # A new function for creating dynamic input fields
+    def create_prediction_inputs(self):
+        # Clear previous inputs
+        for widget in self.input_fields_frame.winfo_children():
+            widget.destroy()
+        
+        self.attribute_inputs = {}
+        
+        if self.dataset is not None and self.attribute_names:
+            # Get features (all attributes except last one which is class)
+            features = self.attribute_names[:-1]
+            
+            for i, feature in enumerate(features):
+                # Create label
+                lbl = ttk.Label(self.input_fields_frame, text=f"{feature}:")
+                lbl.grid(row=i, column=0, padx=5, pady=5, sticky="e")
+                
+                # Create input with suggested values
+                values = self.get_possible_values(feature)
+                if values:
+                    input_widget = ttk.Combobox(
+                        self.input_fields_frame,
+                        values=values,
+                        width=20
+                    )
+                    input_widget.set("Select value")
+                else:
+                    input_widget = ttk.Entry(self.input_fields_frame, width=23)
+                
+                input_widget.grid(row=i, column=1, padx=5, pady=5)
+                self.attribute_inputs[feature] = input_widget
+                
+            # Enable predict button if tree exists
+            self.predict_btn.config(state="normal" if self.id3_tree else "disabled")        
+    # Auxiliary function to obtain possible values ​​of the feature
+    def get_possible_values(self, feature):
+        try:
+            if self.dataset is not None:
+                return list(self.dataset[feature].unique())
+        except KeyError:
+            return []
+        return []
+    # Main prediction function
+    def run_prediction(self):
+        if self.id3_tree is None:
+            messagebox.showerror("Error", "Please build the tree first!")
+            return
+        
+        try:
+            # Collect input values
+            feature_values = {}
+            for feature, widget in self.attribute_inputs.items():
+                value = widget.get() if isinstance(widget, ttk.Combobox) else widget.get()
+                if not value:
+                    raise ValueError(f"Please enter value for {feature}")
+                feature_values[feature] = value
+            
+            # Create example object
+            example = Example(
+                attribute_names=list(self.attribute_inputs.keys()),
+                attribute_values=list(feature_values.values())
+            )
+            
+            # Get prediction
+            prediction = self.id3_tree.classify(example)
+            
+            # Update result display
+            self.prediction_result.config(text=f"Prediction: {prediction}", bootstyle="success")
+            
+        except Exception as e:
+            self.prediction_result.config(text=f"Error: {str(e)}", bootstyle="danger")
+            messagebox.showerror("Prediction Error", str(e))    
+           
     def update_dataset_info(self):
         """Update dataset information display"""
         if self.dataset is not None:
@@ -391,6 +497,7 @@ class DecisionTreeApp(ttk.Window):
             
             # Enable build tree button
             self.build_tree_btn.config(state="normal")
+            self.create_prediction_inputs()
         else:
             self.dataset_info.config(text="No dataset loaded")
             self.features_info.config(text="Features: None")
@@ -422,7 +529,8 @@ class DecisionTreeApp(ttk.Window):
             
             # Activate the visualization tab
             self.notebook.select(2)
-            
+            self.create_prediction_inputs()
+            self.predict_btn.config(state="normal")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to build decision tree: {str(e)}")
             # Re-raise for debugging
@@ -532,7 +640,7 @@ class DecisionTreeApp(ttk.Window):
             messagebox.showerror("Error", f"Failed to save data: {str(e)}")
 
 
-    # tree visualization part
+    ############## tree visualization part ##############
     def create_visualization_tab(self):
         """Create the visualization tab"""
         viz_tab = ttk.Frame(self.notebook)
@@ -541,9 +649,9 @@ class DecisionTreeApp(ttk.Window):
         # Create frame for displaying the tree
         tree_frame = ttk.LabelFrame(viz_tab, text="Decision Tree")
         tree_frame.pack(fill=tk.BOTH, expand=True, pady=10)
-        
+                
         # Text widget for displaying the tree structure
-        self.tree_text = tk.Text(tree_frame, wrap=tk.NONE, font=("Courier", 10))
+        self.tree_text = tk.Text(tree_frame, wrap=tk.NONE, font=("Courier", 15))
         self.tree_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
         # Add scrollbars
@@ -560,4 +668,11 @@ class DecisionTreeApp(ttk.Window):
         
         # Store ID3Tree instance
         self.id3_tree = None
+    
+
+
+
+if __name__ == "__main__":
+    app = DecisionTreeApp()
+    app.mainloop()
 
