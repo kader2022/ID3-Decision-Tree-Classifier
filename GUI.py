@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg , NavigationToolbar2Tk # Add this
 from matplotlib.figure import Figure
+import json
 
 class DecisionTreeApp(ttk.Window):
     def __init__(self):
@@ -344,6 +345,16 @@ class DecisionTreeApp(ttk.Window):
         controls_frame = ttk.Frame(main_frame)
         controls_frame.pack(fill=tk.X, pady=10)
         
+            # load tree button
+        self.load_tree_btn = ttk.Button(
+            controls_frame,
+            text="Load Tree",
+            command=self.load_tree_json,
+            bootstyle=(WARNING, OUTLINE),
+            state="disabled" #  I will enable it after I extract the Features from the tree and not from the data.
+        )
+        self.load_tree_btn.pack(side=tk.LEFT, padx=5)
+        
         # Build tree button
         self.build_tree_btn = ttk.Button(
             controls_frame,
@@ -498,6 +509,7 @@ class DecisionTreeApp(ttk.Window):
             # Enable build tree button
             self.build_tree_btn.config(state="normal")
             self.create_prediction_inputs()
+            self.load_tree_btn.config(state="normal" if self.dataset is not None else "disabled")
         else:
             self.dataset_info.config(text="No dataset loaded")
             self.features_info.config(text="Features: None")
@@ -640,6 +652,61 @@ class DecisionTreeApp(ttk.Window):
             messagebox.showerror("Error", f"Failed to save data: {str(e)}")
 
 
+
+
+    def load_tree_json(self):
+        """load tree from JSON file"""
+        filetypes = [("JSON files", "*.json"), ("All files", "*.*")]
+        file_path = filedialog.askopenfilename(filetypes=filetypes)
+        
+        if not file_path:
+            return
+        
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                tree_dict = json.load(f)
+            
+            # convert dictionary to tree obj
+            self.id3_tree = ID3Tree()
+            self.id3_tree.tree = self.dict_to_tree(tree_dict)
+            
+            # Checking the tree's compatibility with the data
+            if self.dataset is not None:
+                self._validate_tree_compatibility()
+            
+            # Enable tree-based features
+            self.save_tree_btn.config(state="normal")
+            self.predict_btn.config(state="normal")
+            self.display_tree()
+            
+            messagebox.showinfo("Success", f"Tree loaded from {os.path.basename(file_path)}")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load tree: {str(e)}")
+
+    def dict_to_tree(self, tree_dict):
+        """Convert JSON dictionary to tree objects"""
+        if tree_dict['type'] == 'leaf':
+            return Leaf(tree_dict['label'])
+        
+        node = Node(tree_dict['attribute'])
+        for value, child_dict in tree_dict['children'].items():
+            node.children[value] = self.dict_to_tree(child_dict)
+        
+        return node
+
+    def _validate_tree_compatibility(self):
+        """Verify that tree attributes match data"""
+        if self.dataset is None:
+            return
+    def _get_tree_attributes(self, node):
+        """Get all attributes used in the tree"""
+        attributes = set()
+        if isinstance(node, Node):
+            attributes.add(node.attribute_tested)
+            for child in node.children.values():
+                attributes.update(self._get_tree_attributes(child))
+        return attributes
     ############## tree visualization part ##############
     def create_visualization_tab(self):
         """Create the visualization tab"""
