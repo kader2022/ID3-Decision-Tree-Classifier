@@ -1,6 +1,5 @@
 from collections import Counter
 from math import log
-import csv
 
 class Example:
     def __init__(self, attribute_names, attribute_values, label=""):

@@ -1,10 +1,6 @@
 from collections import Counter
-from Data import Dataset
 from Node import Node, Leaf
 import json
-
-
-import networkx as nx
 
 class ID3Tree:
     def __init__(self, dataset=None):

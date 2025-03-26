@@ -1,19 +1,15 @@
 from Data import Dataset, Example
 from Tree import ID3Tree
 from Node import *
-
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
-import pandas as pd
-import numpy as np
-import os
 import matplotlib.pyplot as plt
 import networkx as nx
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg , NavigationToolbar2Tk # Add this
-from matplotlib.figure import Figure
 import json
+import pandas as pd
+import os
 
 class DecisionTreeApp(ttk.Window):
     def __init__(self):
@@ -25,6 +21,7 @@ class DecisionTreeApp(ttk.Window):
         self.dataset = None
         self.tree = None
         self.attribute_names = []
+        self.id3_tree = None
         
         # Configure notebook (tabs)
         self.notebook = ttk.Notebook(self)
@@ -33,8 +30,7 @@ class DecisionTreeApp(ttk.Window):
         # Create the three main tabs
         self.create_data_input_tab()
         self.create_solution_tab()
-        self.create_visualization_tab()
-    
+
     ############## input data part ##############
     def create_data_input_tab(self):
         """Create the data input tab"""
@@ -345,16 +341,6 @@ class DecisionTreeApp(ttk.Window):
         controls_frame = ttk.Frame(main_frame)
         controls_frame.pack(fill=tk.X, pady=10)
         
-            # load tree button
-        self.load_tree_btn = ttk.Button(
-            controls_frame,
-            text="Load Tree",
-            command=self.load_tree_json,
-            bootstyle=(WARNING, OUTLINE),
-            state="disabled" #  I will enable it after I extract the Features from the tree and not from the data.
-        )
-        self.load_tree_btn.pack(side=tk.LEFT, padx=5)
-        
         # Build tree button
         self.build_tree_btn = ttk.Button(
             controls_frame,
@@ -363,6 +349,14 @@ class DecisionTreeApp(ttk.Window):
             bootstyle=SUCCESS
         )
         self.build_tree_btn.pack(side=tk.LEFT, padx=5)
+        
+        plot_tree_btn = ttk.Button(
+            controls_frame, 
+            text="Plot Tree Visualization", 
+            command=self.display_tree_graph,
+            bootstyle=PRIMARY
+        )
+        plot_tree_btn.pack(side=tk.LEFT, padx=5)
         
         # Save tree button (initially disabled)
         self.save_tree_btn = ttk.Button(
@@ -373,6 +367,16 @@ class DecisionTreeApp(ttk.Window):
             state="disabled"
         )
         self.save_tree_btn.pack(side=tk.LEFT, padx=5)
+        
+                    # load tree button
+        self.load_tree_btn = ttk.Button(
+            controls_frame,
+            text="Load Tree",
+            command=self.load_tree_json,
+            bootstyle=(WARNING, OUTLINE),
+            state="disabled" #  I will enable it after I extract the Features from the tree and not from the data.
+        )
+        self.load_tree_btn.pack(side=tk.LEFT, padx=5)
         
         # Dataset info frame
         info_frame = ttk.LabelFrame(main_frame, text="Dataset Information")
@@ -529,9 +533,7 @@ class DecisionTreeApp(ttk.Window):
             # Create and build the ID3 tree
             self.id3_tree = ID3Tree(custom_dataset)
             self.id3_tree.build()
-            
-            # Display the tree structure
-            self.display_tree()
+
             
             # Enable save button
             self.save_tree_btn.config(state="normal")
@@ -540,27 +542,13 @@ class DecisionTreeApp(ttk.Window):
             messagebox.showinfo("Success", "Decision tree built successfully!")
             
             # Activate the visualization tab
-            self.notebook.select(2)
+            # self.notebook.select(2)
             self.create_prediction_inputs()
             self.predict_btn.config(state="normal")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to build decision tree: {str(e)}")
             # Re-raise for debugging
             raise
-    
-    def display_tree(self):
-        """Display the tree structure in the text widget"""
-        if self.id3_tree is None or self.id3_tree.tree is None:
-            return
-        
-        # Get text representation of the tree
-        tree_text = self.id3_tree.get_tree_text_representation()
-        
-        # Update text widget
-        self.tree_text.config(state=tk.NORMAL)
-        self.tree_text.delete(1.0, tk.END)
-        self.tree_text.insert(tk.END, tree_text)
-        self.tree_text.config(state=tk.DISABLED)
     
     def save_tree_json(self):
         """Save the decision tree as a JSON file"""
@@ -651,9 +639,6 @@ class DecisionTreeApp(ttk.Window):
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save data: {str(e)}")
 
-
-
-
     def load_tree_json(self):
         """load tree from JSON file"""
         filetypes = [("JSON files", "*.json"), ("All files", "*.*")]
@@ -677,7 +662,7 @@ class DecisionTreeApp(ttk.Window):
             # Enable tree-based features
             self.save_tree_btn.config(state="normal")
             self.predict_btn.config(state="normal")
-            self.display_tree()
+            
             
             messagebox.showinfo("Success", f"Tree loaded from {os.path.basename(file_path)}")
             
@@ -699,6 +684,7 @@ class DecisionTreeApp(ttk.Window):
         """Verify that tree attributes match data"""
         if self.dataset is None:
             return
+
     def _get_tree_attributes(self, node):
         """Get all attributes used in the tree"""
         attributes = set()
@@ -708,34 +694,105 @@ class DecisionTreeApp(ttk.Window):
                 attributes.update(self._get_tree_attributes(child))
         return attributes
     ############## tree visualization part ##############
-    def create_visualization_tab(self):
-        """Create the visualization tab"""
-        viz_tab = ttk.Frame(self.notebook)
-        self.notebook.add(viz_tab, text="Display Tree")
-        
-        # Create frame for displaying the tree
-        tree_frame = ttk.LabelFrame(viz_tab, text="Decision Tree")
-        tree_frame.pack(fill=tk.BOTH, expand=True, pady=10)
-                
-        # Text widget for displaying the tree structure
-        self.tree_text = tk.Text(tree_frame, wrap=tk.NONE, font=("Courier", 15))
-        self.tree_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        
-        # Add scrollbars
-        tree_y_scroll = ttk.Scrollbar(tree_frame, orient=VERTICAL, command=self.tree_text.yview)
-        tree_y_scroll.pack(side=tk.RIGHT, fill=Y)
-        self.tree_text.config(yscrollcommand=tree_y_scroll.set)
-        
-        tree_x_scroll = ttk.Scrollbar(viz_tab, orient=HORIZONTAL, command=self.tree_text.xview)
-        tree_x_scroll.pack(fill=X)
-        self.tree_text.config(xscrollcommand=tree_x_scroll.set)
-        
-        # Make text widget read-only
-        self.tree_text.config(state=tk.DISABLED)
-        
-        # Store ID3Tree instance
-        self.id3_tree = None
     
+    def hierarchy_pos(self, G, root_node=None, width=1.0, vert_gap=0.2, vert_loc=0, xcenter=0.5):
+        """
+        Calculating node locations for a hierarchical tree.
+        """
+        import networkx as nx
+        if not nx.is_tree(G):
+            raise TypeError("The graph is not a tree")
+        if root_node is None:
+            root_node = list(nx.topological_sort(G))[0]
+
+        def _hierarchy_pos(G, root, width=width, vert_gap=vert_gap, vert_loc=vert_loc,
+                        xcenter=xcenter, pos=None):
+            if pos is None:
+                pos = {root: (xcenter, vert_loc)}
+            else:
+                pos[root] = (xcenter, vert_loc)
+            children = list(G.successors(root))
+            if len(children) != 0:
+                dx = width / len(children)
+                nextx = xcenter - width / 2 - dx / 2
+                for child in children:
+                    nextx += dx
+                    pos = _hierarchy_pos(G, child, width=dx, vert_gap=vert_gap,
+                                        vert_loc=vert_loc - vert_gap, xcenter=nextx, pos=pos)
+            return pos
+
+        return _hierarchy_pos(G, root_node)        
+    
+    def build_graph_from_tree(self, tree):
+        """
+        Build a graph using networkx from the tree.
+        """
+        
+        G = nx.DiGraph()
+        
+        def traverse(node, parent_id=None, edge_label=""):
+            current_id = id(node)
+            #Determine the node type and assign an appropriate label.
+            if isinstance(node, Leaf):
+                label = f"{node.label}"
+                node_type = "leaf"
+            else:
+                label = f"{node.attribute_tested}"
+                node_type = "node"
+            G.add_node(current_id, label=label, type=node_type)
+            if parent_id is not None:
+                G.add_edge(parent_id, current_id, label=edge_label)
+            if isinstance(node, Node):
+                for value, child in node.children.items():
+                    if child is not None:
+                        traverse(child, current_id, edge_label=str(value))
+        
+        traverse(tree)
+        return G
+
+    def display_tree_graph(self):
+
+        if self.id3_tree is None or self.id3_tree.tree is None:
+            messagebox.showerror("Error", "No tree to display!")
+            return
+
+        # Building a graph from a tree
+        G = self.build_graph_from_tree(self.id3_tree.tree)
+        
+        # Using the hierarchy_pos function to obtain a hierarchical layout
+        root_id = id(self.id3_tree.tree)
+        try:
+            pos = self.hierarchy_pos(G, root_node=root_id)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to compute hierarchical layout: {str(e)}")
+            return
+
+        #Split nodes based on the "type" property
+        leaf_nodes = [node for node, attr in G.nodes(data=True) if attr.get('type') == "leaf"]
+        non_leaf_nodes = [node for node, attr in G.nodes(data=True) if attr.get('type') == "node"]
+
+        plt.figure(figsize=(10, 8))
+        
+        nx.draw_networkx_nodes(G, pos, nodelist=non_leaf_nodes, node_color="skyblue", node_size=3500)
+        nx.draw_networkx_nodes(G, pos, nodelist=leaf_nodes, node_color="lightgreen", node_size=3500)
+        
+        # Draw edges
+        nx.draw_networkx_edges(G, pos, arrows=True)
+        edge_labels = nx.get_edge_attributes(G, 'label')
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='red')
+        
+        non_leaf_labels = {node: G.nodes[node]['label'] for node in non_leaf_nodes}
+        nx.draw_networkx_labels(G, pos, labels=non_leaf_labels, font_size=15)
+        
+        for node in leaf_nodes:
+            x, y = pos[node]
+            label = G.nodes[node]['label']
+            plt.text(x, y, label, fontsize=10, fontweight='bold',
+                    horizontalalignment='center', verticalalignment='center')
+        
+        plt.title("visualization of the Decision Tree")
+        plt.axis('off')
+        plt.show()
 
 
 
